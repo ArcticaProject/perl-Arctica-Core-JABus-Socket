@@ -667,7 +667,7 @@ sub DESTROY {
 		BugOUT(9,"JABus::Socket DESTROY socket file exists: $self->{'the_socket_path'}");
 		unlink($self->{'the_socket_path'}) or warn("JABus::Socket DESTROY unable to unlink socket file!");
 	}
-	warn("JABus::Socket Object $self->{'_socket_id'} ($self->{'s_or_c'}) DESTOYED");
+	warn("JABus::Socket Object $self->{'_socket_id'} ($self->{'s_or_c'}) DESTROYED");
 	return 0;
 }
 
