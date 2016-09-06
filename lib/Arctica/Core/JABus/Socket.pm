@@ -147,7 +147,7 @@ sub new {
 		$self->{'handle_in_solo'} = $dev_conf->{'handle_in_solo'};
 	} elsif ($dev_conf->{'handle_in_dispatch'}) { 
 		$self->{'handle_in_dispatch'} = $dev_conf->{'handle_in_dispatch'};
-	} 
+	}
 	
 	unless ($self->{'handle_in_dispatch'} or $self->{'handle_in_solo'}) {
 		die("You need to define something for handle_in_dispatch or handle_in_solo");
@@ -269,9 +269,9 @@ sub new {
 
 	$arctica_core_object->{'aobj'}{'JABus'}{$S_or_C}{$self->{'_socket_id'}}
 		= \$self;
-		
+
 	BugOUT(9,"JABus Socket new->DONE");
-	
+
 	return $self;
 }
 
@@ -377,13 +377,13 @@ sub _server_handle_conn {
 	my $self = $_[0];
 	my $client_id = $_[1];
 	my $client_conn_cond = $_[2];
-	
+
 	if ($client_conn_cond >= 'hup' or $client_conn_cond >= 'err') {
 		BugOUT(9,"JABus Server _handle_conn()->ERRHUP!");
 		$self->_server_terminate_client_conn($client_id);
 		BugOUT(9,"JABus Server _handle_conn()->DONE!");
 		return 0;
-		
+
 	} elsif ( $client_conn_cond >= 'in' ) {
 		if ($self->{'clients'}{$client_id}{'io_obj'}) {
 			my $bytes_read = sysread($self->{'clients'}{$client_id}{'io_obj'},my $in_data,16384);
@@ -401,8 +401,7 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 			eval {
 				$jData = decode_json($in_data_line);
 			} or warn("JABus Server _handle_conn()->DONE (Got some garbage instead of JSON!)");
-			
-			
+
 			if ($jData) {
 				if ($self->{'clients'}{$client_id}{'status'}{'auth'} eq 1) {
 					if ($self->{'handle_in_solo'}) {
@@ -466,7 +465,6 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 						}
 					}
 
-
 				}
 			} else {
 				if ($self->{'clients'}{$client_id}{'status'}{'auth'} eq 1) {
@@ -510,7 +508,7 @@ sub _server_terminate_client_conn {
 		}
 		delete $self->{'clients'}{$client_id};
 	}
-	
+
 	return 1;
 }
 
@@ -534,13 +532,12 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 	$in_data_line =~ s/^\s*//g;
 	$in_data_line =~ s/\s*$//g;
 	if ($in_data_line =~ /JAB/) {
-	
+
 			my $jData;
 			eval {
 				$jData = decode_json($in_data_line);
 			} or warn("JABus  _client_handle_conn()->DONE (Got some garbage instead of JSON!)");
-			
-			
+
 			if ($jData) {
 #				print Dumper($jData);
 				if ($self->{'status'}{'auth'} eq 1) {
@@ -606,7 +603,7 @@ sub _client_terminate_conn {
 		delete $arctica_core_object->{'aobj'}{'JABus'}{'Client'}{$self->{'_socket_id'}};
 		undef $self;
 	}
-	
+
 	return 1;
 }
 
@@ -681,6 +678,5 @@ sub DESTROY {
 #
 #	return 1;
 #}
-
 
 1;
