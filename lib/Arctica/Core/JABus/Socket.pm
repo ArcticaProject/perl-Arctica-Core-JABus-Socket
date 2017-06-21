@@ -139,6 +139,7 @@ sub new {
 	};
 	if ($dev_conf->{'hooks'}) {
 		$self->{'hooks'} = $dev_conf->{'hooks'};
+#		print "HOOKS:\t\n",Dumper($self->{'hooks'}),"\n";
 	}
 	$self->{'declare_id'} = $arctica_core_object->{'AExecDeclaration'};
 	if ($dev_conf->{'handle_in_solo'} and $dev_conf->{'handle_in_dispatc'}) {
@@ -275,23 +276,14 @@ sub new {
 	return $self;
 }
 
-#sub send {
-#	BugOUT(9,"JABus::Socket Server send()->ENTER");
-#	my $self = $_[0];
-#	my $client_id = $_[1];
-#	my $data_to_send = $_[2];
-#	my $json_data = encode_json($data_to_send);
-#	if ($self->{'clients'}{$client_id}{'io_obj'}) {
-#		my $bytes_written 
-#			= syswrite($self->{'clients'}{$client_id}{'io_obj'},
-#			$json_data)
-#			 or warn("Error while trying to send to client ($!)");
-#		$self->{'clients'}{$client_id}{'bytes_written'}+=$bytes_written;
-#		$self->{'total_bytes_written'} += $bytes_written;
-#		BugOUT(8,"JABus::Socket Server Send->JAB Sent...");
-#	}
-#	BugOUT(9,"JABus::Socket Server send()->DONE");
-#}
+sub server_get_socket_id {
+	my $self = $_[0];
+	if ($self->{'_socket_id'}) {
+		return $self->{'_socket_id'};
+	} else {
+		die("Another rupture in space&time!");
+	}
+}
 
 sub server_send {
 	BugOUT(9,"JABus::Socket server_send()->ENTER");
@@ -316,7 +308,7 @@ sub server_send {
 							'JAB' => 'data'
 						});
 				} else {
-					die("JABus::Socket server_send() '$dispatch_to' is valid dispatch alias");
+					die("JABus::Socket server_send() '$dispatch_to' is invalid dispatch alias");
 				}
 			} else {
 				die("JABus::Socket server_send() DISPATCH TO WHERE?!!?!");
@@ -379,8 +371,8 @@ sub _server_handle_conn {
 	my $client_conn_cond = $_[2];
 
 	if ($client_conn_cond >= 'hup' or $client_conn_cond >= 'err') {
-		BugOUT(9,"JABus Server _handle_conn()->ERRHUP!");
-		$self->_server_terminate_client_conn($client_id);
+		BugOUT(9,"JABus Server _handle_conn()->ERRHUP [$client_conn_cond]!");
+		$self->server_terminate_client_conn($client_id);
 		BugOUT(9,"JABus Server _handle_conn()->DONE!");
 		return 0;
 
@@ -407,14 +399,16 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 					if ($self->{'handle_in_solo'}) {
 						BugOUT(9,"JABus::Socket _server_handle_conn()->Got JSON for solo!");
 						
-		 				$self->{'handle_in_solo'}->($jData->{'data'},
-		 					sub {\$self->server_send($client_id,$_[0],$_[1]);});
+						$self->{'handle_in_solo'}->($jData->{'data'},$client_id,$self);
+#		 				$self->{'handle_in_solo'}->($jData->{'data'},
+#		 					sub {\$self->server_send($client_id,$_[0],$_[1]);});
 		 					
 					} elsif ($self->{'handle_in_dispatch'}) {
 						BugOUT(9,"JABus::Socket _server_handle_conn()->Got JSON for dispatch ($jData->{'disp_to'})!");
 #						print "DISPATCHDATA:\n",Dumper($jData);
 						if ($self->{'handle_in_dispatch'}{$jData->{'disp_to'}}) {
-							$self->{'handle_in_dispatch'}{$jData->{'disp_to'}}($jData->{'data'}, sub {\$self->server_send($client_id,$_[0],$_[1]);});
+							$self->{'handle_in_dispatch'}{$jData->{'disp_to'}}($jData->{'data'},$client_id,$self);
+#							$self->{'handle_in_dispatch'}{$jData->{'disp_to'}}($jData->{'data'}, sub {\$self->server_send($client_id,$_[0],$_[1]);});
 						} else {
 							die("Didn't we send over a list of valid options? WTF?");
 						}
@@ -434,7 +428,7 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 #						# MAY WANT TO DO SOMETHING HERE!?} elsif (($jData->{'handler_type'} eq "dispatch") and $self->{'handle_in_dispatch'}) {
 #						# MAY WANT TO DO SOMETHING HERE!?} else {
 #						warn("JABus Server _handle_conn()-> Client handler type is $jData->{'handler_type'}... but we are not...!");
-#						$self->_server_terminate_client_conn($client_id);
+#						$self->server_terminate_client_conn($client_id);
 #						return 0;
 #					}
 					
@@ -449,7 +443,9 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 							$self->{'clients'}{$client_id}{'dispatch_list'} = $jData->{'dispatch_list'};
 							# add sanitation of incomming list
 						}
-
+						if ($self->{'hooks'}{'on_server_client_auth_ok'}) {
+							$self->{'hooks'}{'on_server_client_auth_ok'}($client_id,$self);
+						}
 						$self->_server_send($client_id,{
 								'auth' => 1,
 								'JAB' => 'auth',
@@ -460,7 +456,7 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 						if (lenght($self->{'auth_key'}) > 30) {
 							
 						} else {
-							$self->_server_terminate_client_conn($client_id);
+							$self->server_terminate_client_conn($client_id);
 							return 0;
 						}
 					}
@@ -471,7 +467,7 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 					warn("JABus Server _handle_conn()-> Got the GARBAGE after ok auth.... ?!");
 				} else {
 					BugOUT(9,"JABus Server _handle_conn()->Probably something else tickeling our sockets...");
-					$self->_server_terminate_client_conn($client_id);
+					$self->server_terminate_client_conn($client_id);
 					BugOUT(8,"OR IS IT!?");
 					return 0;
 				}
@@ -481,21 +477,24 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 			return 1;
 		} else {
 			warn("JABus Server _handle_conn()->DONE (client_fh problem?!)");
-			$self->_server_terminate_client_conn($client_id);
+			$self->server_terminate_client_conn($client_id);
 			return 0;
 		}
 	} else {
 		warn("JABus Server _handle_conn()->DONE (Weird exception?!)");
-		$self->_server_terminate_client_conn($client_id);
+		$self->server_terminate_client_conn($client_id);
 		return 0;
 	}
 }
 
-sub _server_terminate_client_conn {
+sub server_terminate_client_conn {
 	# also serves as a general cleanup of failed or partialy initiated connections
 	my $self = $_[0];
 	my $client_id = $_[1];
 	if ($self->{'clients'}{$client_id}) {
+		if ($self->{'hooks'}{'on_server_terminate_client'}) {
+			$self->{'hooks'}{'on_server_terminate_client'}($client_id,$self);
+		}
 		if ($self->{'clients'}{$client_id}{'watcher'}) {
 			Glib::Source->remove($self->{'clients'}{$client_id}{'watcher'});
 		}
@@ -507,9 +506,39 @@ sub _server_terminate_client_conn {
 			$self->{'clients'}{$client_id}{'io_obj'} = undef;
 		}
 		delete $self->{'clients'}{$client_id};
+		BugOUT(8,"JABus Server _server_terminate_client_conn()-> CLEANUP DONE!");
+	} else {
+		BugOUT(8,"JABus Server _server_terminate_client_conn()-> ERR... Can't clean up a client id that does not exist!?! (Maybe we've taken care of it already?)");
 	}
 
 	return 1;
+}
+
+sub server_get_client_info {
+	BugOUT(9,"JABus::Socket server_get_client_info()->ENTER");
+	my $self = $_[0];
+	my $client_id = $_[1];
+	my $get_value = lc($_[2]);
+	if ($self->{'clients'}{$client_id}) {
+		$get_value =~ s/[\n\s]//g;
+		if ($get_value =~ /^([a-z0-9\_]{3,})$/) {
+			$get_value = $1;
+			if ($self->{'clients'}{$client_id}{$get_value}) {
+				BugOUT(9,"JABus::Socket server_get_client_info()-> Returning $client_id->$get_value");
+				return $self->{'clients'}{$client_id}{$get_value};
+			} else {
+				BugOUT(9,"JABus::Socket server_get_client_info()-> ERR '$get_value' does not exist!");
+				return 0;
+			}
+		} else {
+			BugOUT(9,"JABus::Socket server_get_client_info()-> ERR'$get_value'?!");
+			return 0;
+		}
+	} else {
+		warn("JABus::Socket server_get_client_info()->Requesting info from invalid client_id? ($client_id)");
+		return 0;
+	}
+	BugOUT(9,"JABus::Socket server_get_client_info()->DONE");
 }
 
 sub _client_handle_conn {
@@ -518,6 +547,9 @@ sub _client_handle_conn {
 	my $connection_cond = $_[1];
 
 	if ($connection_cond >= 'hup' or $connection_cond >= 'err') {
+		if ($self->{'hooks'}{'on_client_errhup'}) {
+			$self->{'hooks'}{'on_client_errhup'}($self);
+		}
 		BugOUT(9,"JABus::Socket _client_handle_conn()->ERRHUP!");
 		$self->_client_terminate_conn();
 		BugOUT(9,"JABus::Socket _client_handle_conn()->DONE!");
@@ -661,7 +693,7 @@ sub _client_send {
 sub DESTROY {
 	my $self = $_[0];
 	if (($self->{'s_or_c'} eq "Server") and (-e $self->{'the_socket_path'})) {
-		BugOUT(9,"JABus::Socket DESTROY socket file exists: $self->{'the_socket_path'}");
+		BugOUT(9,"JABus::Socket $self->{'s_or_c'} DESTROY socket file exists: $self->{'the_socket_path'}");
 		unlink($self->{'the_socket_path'}) or warn("JABus::Socket DESTROY unable to unlink socket file!");
 	}
 	warn("JABus::Socket Object $self->{'_socket_id'} ($self->{'s_or_c'}) DESTROYED");
