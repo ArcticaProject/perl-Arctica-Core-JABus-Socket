@@ -245,7 +245,7 @@ sub new {
 					});
 				} elsif ($self->{'handle_in_dispatch'}) {
 					my %to_send;
-					foreach my $hidp_key (keys $self->{'handle_in_dispatch'}) {#do some filtering here?!
+					foreach my $hidp_key (keys %{$self->{'handle_in_dispatch'}}) {#do some filtering here?!
 #						print "\t\tKEY:\t$hidp_key\n";
 						$to_send{$hidp_key} = 1;
 					}
