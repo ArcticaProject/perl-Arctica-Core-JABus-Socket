@@ -1,0 +1,27 @@
+2017-06-23 18:51:23 +0200 Mike Gabriel (18d4c65)
+
+	* lib/Arctica/Core/JABus/Socket.pm:: Avoid keys on references.
+          Forbidden in Debian 9's Perl version anyway. (HEAD ->
+          master, origin/master, gh-arctica/master)
+
+2017-06-21 13:34:31 +0200 GZNGET FOSS Team (4877770)
+
+	* Update to latest development status (Arctica Browser development)
+          dating 20170621.
+
+2016-09-06 18:20:50 +0200 Mike Gabriel (6ce50f4)
+
+	* Socket.pm: whitespace clean-up
+
+2016-09-06 18:18:28 +0200 Mike Gabriel (1b9d76e)
+
+	* typos: DESTOYED -> DESTROYED.
+
+2016-09-06 17:29:43 +0200 Mike Gabriel (39f5592)
+
+	* Add license files (AGPL-3+, strictly GPL-2).
+
+2016-09-06 15:46:45 +0200 GZNGET FOSS Team (6a14d48)
+
+	* initial Arctica JABus implementation
+
