@@ -20,5 +20,13 @@ Depends:
  libjson-perl,
  ${perl:Depends},
  ${misc:Depends},
-Description: Core Perl modules for the Arctica Framework
- FIXME: Some descripttive text needs to go here...
+Description: JABus Server/Client implementation for Arctica Framework
+ The Arctica Project brings forth a remote computing framework of
+ enterprise grade and quality. The Arctica Framework is a highly
+ modularized and thus pluggable for developing alls sort of remote
+ services.
+ .
+ The Arctica::Core::JABus::Socket module provides an API to Arctica
+ modules and service that allow easy set up of all sorts of server-
+ client connections. JABus is event centric, so you can tie hooks
+ to special events happening on the data connection.
