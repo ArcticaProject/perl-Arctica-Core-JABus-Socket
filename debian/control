@@ -17,6 +17,7 @@ Standards-Version: 3.9.7
 Package: libarctica-core-jabus-socket-perl
 Architecture: all
 Depends:
+ libjson-perl,
  ${perl:Depends},
  ${misc:Depends},
 Description: Core Perl modules for the Arctica Framework
