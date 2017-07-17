@@ -12,7 +12,7 @@ Uploaders:
 Homepage: https://arctica-project.org/
 Vcs-Git: https://github.com/ArcticaProject/perl-Arctica-Core-JABus-Socket
 Vcs-Browser: https://github.com/ArcticaProject/perl-Arctica-Core-JABus-Socket
-Standards-Version: 3.9.7
+Standards-Version: 4.0.0
 
 Package: libarctica-core-jabus-socket-perl
 Architecture: all
