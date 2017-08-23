@@ -65,6 +65,7 @@ use Data::Dumper;
 use JSON;# Should we use the OO style apporach?
 use Arctica::Core::eventInit qw( genARandom BugOUT );
 use IO::Socket::UNIX qw( SOCK_STREAM SOMAXCONN );
+use Arctica::Core::ManageDirs qw( permZealot );
 # Be very selective about what (if any) gets exported by default:
 our @EXPORT = qw(genARandom);
 # And be mindfull of what we lett the caller request here too:
@@ -73,10 +74,7 @@ our @EXPORT_OK = qw( BugOUT bugOutCfg );
 my $arctica_core_object;
 
 # * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE *
-# MISSING A BUNCH OF HOOKS, SANITATION AND PROPPER AUTHENTICATION FOR ALL REMOTE
-# AND LOCAL TCP SOCKETS. (relatively simpel apporach will be attached soon)
 # PS! DON'T FORGET STRICT FILE PREMS FOR SOCKETS ETC....
-# ANTICIPATING SUNSET WEEK 34....
 # * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE * NOTE *
 # DIE on obvious developer mistakes.... WARN on stuff that could potentially 
 # happen dynamically during runtime.
@@ -156,6 +154,7 @@ sub new {
 	
 	if ($S_or_C eq "Server") {
 		$self->{'_socket_id'} = genARandom('id');
+		$self->{'_socket_auth_key'} = genARandom('key');
 		BugOUT(1,"Server SocketID:	$self->{'_socket_id'}");
 	} elsif ($S_or_C eq "Client") {
 		if ($dev_conf->{'connect_to'}) {# ADD SANITATION HERE!!!!
@@ -166,10 +165,55 @@ sub new {
 
 	bless($self, $class_name);
 	if ($S_or_C eq "Server") {
+
 		BugOUT(1,"Initiating Server...");
-		# TCP STUFF GOES HERE ON NEXT REWRITE!
-		# ONLY USED FOR CLIENT OS WITHOUT UNIX SOCKET SUPPORT.
-		if ($socket_type eq "unix") {
+		if ($socket_type eq "tcp")  {
+			my $tmp_soc_dir;
+			if ($socket_destination eq "local") {
+				$tmp_soc_dir = "$the_tmpdir/soc/local";
+			} elsif ($socket_destination eq "remote") {
+				$tmp_soc_dir = "$the_tmpdir/soc/remote/out";
+			} else {
+				die("There must be a hole in the fabric of time and space!");
+			}
+			unless (-d $tmp_soc_dir) {
+				die("JABus::Socket expects tmp dirs to be present.");
+			}
+			$self->{'s_or_c'} = "Server";
+			if ($dev_conf->{'tcp_port'} =~ /(\d{1,5})/) {
+				$self->{'tcp_port'} = $1;
+			} else {
+				die("Don't know what TCP port to use!");
+			}
+# FIXME	Add support for autoselection of ports here.... and using ports from predefined.
+			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}";
+			open(SOCINF,">$self->{'the_socket_path'}.inf");
+			permZealot("$self->{'the_socket_path'}.inf");
+			print SOCINF "tcp\n$self->{'tcp_port'}\n$self->{'_socket_auth_key'}\n";
+			close(SOCINF);
+
+			$self->{'the_socket'} = IO::Socket::INET->new(
+					LocalAddr => "127.0.0.1",
+					Proto => "tcp",
+					LocalPort => $self->{'tcp_port'},
+#					Local => $self->{'the_socket_path'},# do something "smart" here!
+					Type => SOCK_STREAM,
+					Reuse => 1,
+					Timeout => 5,
+					Listen => SOMAXCONN
+				);
+			if (defined $self->{'the_socket'}) {
+				# Hand it over to a watcher...
+				$self->{'the_fileno'} = fileno($self->{'the_socket'});
+				$self->{'watcher'} = Glib::IO->add_watch(
+					$self->{'the_fileno'}, 'in',
+					sub {\$self->_server_accept_conn();}, 
+					$self->{'the_socket'});
+					BugOUT(1,"Initiation complete!");
+			} else {
+				die("Unable to initiate socket: $self->{'_socket_id'} ($tmp_soc_dir)");# DO SOMETHING ELSE HERE!
+			}
+		} elsif ($socket_type eq "unix") {
 			my $tmp_soc_dir;
 			if ($socket_destination eq "local") {
 				$tmp_soc_dir = "$the_tmpdir/soc/local";
@@ -183,13 +227,19 @@ sub new {
 			}
 		
 			$self->{'s_or_c'} = "Server";
-			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}.sock";
+			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}";
+			open(SOCINF,">$self->{'the_socket_path'}.inf");
+			permZealot("$self->{'the_socket_path'}.inf");
+			print SOCINF "unix\n$self->{'the_socket_path'}.sock\n$self->{'_socket_auth_key'}\n";
+			close(SOCINF);
 			$self->{'the_socket'} = IO::Socket::UNIX->new(
-				Local => $self->{'the_socket_path'},# do something "smart" here!
-				Type => SOCK_STREAM,
-				Reuse => 1,
-				Timeout => 5,
-					Listen => SOMAXCONN);
+					Local => "$self->{'the_socket_path'}.sock",# do something "smart" here!
+					Type => SOCK_STREAM,
+					Reuse => 1,
+					Timeout => 5,
+					Listen => SOMAXCONN
+				);
+			permZealot("$self->{'the_socket_path'}.sock");
 			if (defined $self->{'the_socket'}) {
 				# Hand it over to a watcher...
 				$self->{'the_fileno'} = fileno($self->{'the_socket'});
@@ -202,11 +252,12 @@ sub new {
 				die("Unable to initiate socket: $self->{'_socket_id'} ($tmp_soc_dir)");# DO SOMETHING ELSE HERE!
 			}
 		}
+
 	} elsif ($S_or_C eq "Client") {
 		BugOUT(1,"Initiating Client..");
-		# TCP STUFF GOES HERE ON NEXT REWRITE!
-		# ONLY USED FOR CLIENT OS WITHOUT UNIX SOCKET SUPPORT.
-		if ($socket_type eq "unix") {
+
+		if ($socket_type eq "tcp") {
+
 			my $tmp_soc_dir;
 			if ($socket_destination eq "local") {
 				$tmp_soc_dir = "$the_tmpdir/soc/local";
@@ -220,9 +271,94 @@ sub new {
 			}
 			
 			$self->{'s_or_c'} = "Client";
-			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}.sock";
+			$self->{'tcp_port'} = 5462;
+			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}";
+			BugOUT(9,"SOCKPATH: $self->{'the_socket_path'}.inf");
+			open(SOCINF,"$self->{'the_socket_path'}.inf");
+			my ($sinf_type,$sinf_port,$sinf_authkey) = <SOCINF>;
+			close(SOCINF);
+			if ($sinf_type =~ /tcp/) {
+				$sinf_port =~ s/\D//g;
+				if ($sinf_port =~ /(\d{1,5})/) { 
+					$self->{'tcp_port'} = $1;
+				} else {
+					die("Eh...TCP Port# '$sinf_port' ?");
+				}
+				$sinf_authkey =~ s/[^a-zA-Z0-9]//g;
+				if ($sinf_authkey =~ /([a-zA-Z0-9]{30,})/) {
+					$self->{'_socket_auth_key'} = $1;
+				} else {
+					$self->{'_socket_auth_key'} = 0;
+					warn("Invalid auth key...  Connection will probably fail...");
+				}
+			} else {
+				die("Expecting 'tcp' but got '$sinf_type'");
+			}
+
+			$self->{'the_socket'} =  IO::Socket::INET->new(
+					PeerAddr => "127.0.0.1",
+					PeerPort => $self->{'tcp_port'}, 
+					Type	=> SOCK_STREAM,
+					Timeout	=> 5,
+				);
+			if (defined $self->{'the_socket'}) {
+				$self->{'the_socket'}->autoflush(1);
+				# Hand it over to a watcher...
+				$self->{'the_fileno'} = fileno($self->{'the_socket'});# do we ever really use this?
+					$self->{'watcher'} = Glib::IO->add_watch ( 
+						$self->{'the_fileno'}, 
+						['in', 'hup', 'err'], 
+						sub {\$self->_client_handle_conn($_[1])},
+						$self->{'the_socket'});
+
+				# REMOVE THE FOLLOWING LINE... INSERT AUTH STUFFS HERE
+				if ($self->{'handle_in_solo'}) {
+					$self->_client_send({
+						'JAB' => 'auth',
+						'declare_id' => $self->{'declare_id'},
+						'handler_type' => 'solo',
+						'auth_key' => $self->{'_socket_auth_key'},
+					});
+				} elsif ($self->{'handle_in_dispatch'}) {
+					my %to_send;
+					foreach my $hidp_key (keys %{$self->{'handle_in_dispatch'}}) {#do some filtering here?!
+#						print "\t\tKEY:\t$hidp_key\n";
+						$to_send{$hidp_key} = 1;
+					}
+					$self->_client_send({
+						'JAB' => 'auth',
+						'declare_id' => $self->{'declare_id'},
+						'handler_type' => 'dispatch',
+						'dispatch_list' => \%to_send,
+						'auth_key' => $self->{'_socket_auth_key'},
+					});
+				} else {
+					die("THIS SHOULD NEVER HAPPEN");
+				}
+
+
+				BugOUT(1,"Initiation complete!");
+			} else {
+				die("Unable to initiate socket: $self->{'_socket_id'} ($tmp_soc_dir)");# DO SOMETHING ELSE HERE!
+			}
+
+		} elsif ($socket_type eq "unix") {
+			my $tmp_soc_dir;
+			if ($socket_destination eq "local") {
+				$tmp_soc_dir = "$the_tmpdir/soc/local";
+			} elsif ($socket_destination eq "remote") {
+				$tmp_soc_dir = "$the_tmpdir/soc/remote/in";
+			} else {
+				die("There must be a hole in the fabric of time and space!");
+			}
+			unless (-d $tmp_soc_dir) {
+				die("JABus::Socket expects tmp dirs to be present. ($tmp_soc_dir)");
+			}
+			
+			$self->{'s_or_c'} = "Client";
+			$self->{'the_socket_path'} = "$tmp_soc_dir/$self->{'_socket_id'}";
 			$self->{'the_socket'} =  IO::Socket::UNIX->new(
-				Peer	=> $self->{'the_socket_path'},
+				Peer	=> "$self->{'the_socket_path'}.sock",
 				Type	=> SOCK_STREAM,
 				Timeout	=> 5 );
 			if (defined $self->{'the_socket'}) {
@@ -379,11 +515,11 @@ sub _server_handle_conn {
 	} elsif ( $client_conn_cond >= 'in' ) {
 		if ($self->{'clients'}{$client_id}{'io_obj'}) {
 			my $bytes_read = sysread($self->{'clients'}{$client_id}{'io_obj'},my $in_data,16384);
-#print "IND:\n$in_data\n\n";
+
 			$self->{'total_bytes_read'} += $bytes_read;
 			$self->{'clients'}{$client_id}{'bytes_read'} 
 								+= $bytes_read;
-
+if ($bytes_read > 0) {
 foreach my $in_data_line (split(/\n/,$in_data)) {
 	$in_data_line =~ s/^\s*//g;
 	$in_data_line =~ s/\s*$//g;
@@ -400,15 +536,14 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 						BugOUT(9,"JABus::Socket _server_handle_conn()->Got JSON for solo!");
 						
 						$self->{'handle_in_solo'}->($jData->{'data'},$client_id,$self);
-#		 				$self->{'handle_in_solo'}->($jData->{'data'},
-#		 					sub {\$self->server_send($client_id,$_[0],$_[1]);});
-		 					
+
+
 					} elsif ($self->{'handle_in_dispatch'}) {
 						BugOUT(9,"JABus::Socket _server_handle_conn()->Got JSON for dispatch ($jData->{'disp_to'})!");
-#						print "DISPATCHDATA:\n",Dumper($jData);
+
 						if ($self->{'handle_in_dispatch'}{$jData->{'disp_to'}}) {
 							$self->{'handle_in_dispatch'}{$jData->{'disp_to'}}($jData->{'data'},$client_id,$self);
-#							$self->{'handle_in_dispatch'}{$jData->{'disp_to'}}($jData->{'data'}, sub {\$self->server_send($client_id,$_[0],$_[1]);});
+
 						} else {
 							die("Didn't we send over a list of valid options? WTF?");
 						}
@@ -423,14 +558,6 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 						die("THIS SHOULD NEVER HAPPEN");
 					}
 					BugOUT(9,"JABus Server _handle_conn()-> PRE AUTH JSON...");
-# Client and server are no longer required to be same input handler type....
-#					if (($jData->{'handler_type'} eq "solo") and $self->{'handle_in_solo'}) {
-#						# MAY WANT TO DO SOMETHING HERE!?} elsif (($jData->{'handler_type'} eq "dispatch") and $self->{'handle_in_dispatch'}) {
-#						# MAY WANT TO DO SOMETHING HERE!?} else {
-#						warn("JABus Server _handle_conn()-> Client handler type is $jData->{'handler_type'}... but we are not...!");
-#						$self->server_terminate_client_conn($client_id);
-#						return 0;
-#					}
 					
 					if (($self->{'type'} eq "unix") and ($self->{'destination'} eq "local")) {
 						# Accepting connections should probably move to a sub func 
@@ -453,8 +580,30 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 								'server_handler_type' => $server_handler_type,
 							});
 					} else {
-						if (lenght($self->{'auth_key'}) > 30) {
-							
+						if (length($jData->{'auth_key'}) > 30) {
+							if ($jData->{'auth_key'} eq $self->{'_socket_auth_key'}) {
+								BugOUT(8,"Auth SUCCESS!");
+								$self->{'clients'}{$client_id}{'status'}{'auth'} = 1;
+								$self->{'clients'}{$client_id}{'declared_id'} = $jData->{'declare_id'};
+						
+								$self->{'clients'}{$client_id}{'handler_type'} = $jData->{'handler_type'};
+								if ($jData->{'handler_type'} eq "dispatch") {
+#									print "DUMPYO:\n",Dumper($jData->{'dispatch_list'}),"\n\n";
+									$self->{'clients'}{$client_id}{'dispatch_list'} = $jData->{'dispatch_list'};
+									#FIXME Add sanitation of incomming list
+								}
+								if ($self->{'hooks'}{'on_server_client_auth_ok'}) {
+									$self->{'hooks'}{'on_server_client_auth_ok'}($client_id,$self);
+								}
+								$self->_server_send($client_id,{
+										'auth' => 1,
+										'JAB' => 'auth',
+										'server_declare_id' => $self->{'declare_id'},
+										'server_handler_type' => $server_handler_type,
+									});
+
+
+							}
 						} else {
 							$self->server_terminate_client_conn($client_id);
 							return 0;
@@ -473,7 +622,11 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 				}
 			}
 
-}}
+}}} else {
+	warn("JABus Server _handle_conn()->DONE (client_fh read problem?!)");
+	$self->server_terminate_client_conn($client_id);
+	return 0;
+}
 			return 1;
 		} else {
 			warn("JABus Server _handle_conn()->DONE (client_fh problem?!)");
@@ -557,9 +710,10 @@ sub _client_handle_conn {
 	} elsif ( $connection_cond >= 'in' ) {
 		if ($self->{'the_socket'}) {
 			my $bytes_read = sysread($self->{'the_socket'},my $in_data,16384);
-#print "IND:\n$in_data\n\n";
+
 			$self->{'bytes_read'} += $bytes_read;
-			
+
+if ($bytes_read > 0) {
 foreach my $in_data_line (split(/\n/,$in_data)) {
 	$in_data_line =~ s/^\s*//g;
 	$in_data_line =~ s/\s*$//g;
@@ -604,7 +758,11 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 				}
 			} 
 			#or warn("JABus::Socket _client_handle_conn()->DONE (Got some garbage instead of JSON!)");
-}}
+}}} else {
+	warn("JABus::Socket _client_handle_conn()->DONE (client_fh problem?!)");
+	$self->_client_terminate_conn();
+	return 0;
+}
 			return 1;
 		} else {
 			warn("JABus::Socket _client_handle_conn()->DONE (client_fh problem?!)");
@@ -690,25 +848,26 @@ sub _client_send {
 }
 
 
+sub get_socinf {
+	my $self = $_[0];
+	return ($self->{'_socket_id'},$self->{'_socket_auth_key'});
+}
+
+
 sub DESTROY {
 	my $self = $_[0];
-	if (($self->{'s_or_c'} eq "Server") and (-e $self->{'the_socket_path'})) {
-		BugOUT(9,"JABus::Socket $self->{'s_or_c'} DESTROY socket file exists: $self->{'the_socket_path'}");
-		unlink($self->{'the_socket_path'}) or warn("JABus::Socket DESTROY unable to unlink socket file!");
+	if (($self->{'s_or_c'} eq "Server") and (-e "$self->{'the_socket_path'}.sock")) {
+		BugOUT(9,"JABus::Socket $self->{'s_or_c'} DESTROY socket file exists: $self->{'the_socket_path'}.sock");
+		unlink("$self->{'the_socket_path'}.sock") or warn("JABus::Socket DESTROY unable to unlink unix socket 'file'!");
 	}
+
+	if (-f "$self->{'the_socket_path'}.inf") {
+		unlink("$self->{'the_socket_path'}.inf") or warn("JABus::Socket DESTROY unable to unlink socket inf file!");
+	}
+
 	warn("JABus::Socket Object $self->{'_socket_id'} ($self->{'s_or_c'}) DESTROYED");
 	return 0;
 }
 
-
-# REMOVE THIS GARBAGE?!?!?
-#sub server_drop_client {
-#	return 1;
-#}
-#
-#sub close_socket {
-#
-#	return 1;
-#}
 
 1;
