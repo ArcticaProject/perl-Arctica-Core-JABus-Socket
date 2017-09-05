@@ -1,8 +1,34 @@
+2017-09-05 14:26:17 +0200 Mike Gabriel (2fbddeb)
+
+	* release 0.0.0.2 (HEAD -> master)
+
+2017-08-23 10:01:24 +0200 GZNGET FOSS Team (d7f6863)
+
+	* Adding support for TCP (gh-arctica/master)
+
+2017-07-17 18:32:24 +0200 Mike Gabriel (98ff93a)
+
+	* debian/control: Provide proper SYNOPSIS and LONG_DESCRIPTION.
+          (origin/master)
+
+2017-07-17 18:29:34 +0200 Mike Gabriel (569dc2d)
+
+	* debian/control: Bump Standards-Version to 4.0.0. No changes needed.
+
+2017-07-17 18:29:05 +0200 Mike Gabriel (3961b58)
+
+	* debian/control: Add D (libarctica-core-jabus-socket-perl):
+          libjson-perl.
+
+2017-06-26 21:53:55 +0200 Mike Gabriel (0cca569)
+
+	* release 0.0.0.1 (tag: 0.0.0.1, gh-arctica/release-builds,
+          release-builds)
+
 2017-06-23 18:51:23 +0200 Mike Gabriel (18d4c65)
 
 	* lib/Arctica/Core/JABus/Socket.pm:: Avoid keys on references.
-          Forbidden in Debian 9's Perl version anyway. (HEAD ->
-          master, origin/master, gh-arctica/master)
+          Forbidden in Debian 9's Perl version anyway.
 
 2017-06-21 13:34:31 +0200 GZNGET FOSS Team (4877770)
 

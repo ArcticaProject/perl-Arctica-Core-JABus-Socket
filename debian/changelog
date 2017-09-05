@@ -1,3 +1,10 @@
+libarctica-core-jabus-socket-perl (0.0.0.2-0) unstable; urgency=medium
+
+  * Upstream-provided Debian package for nx-libs.
+    See upstream ChangeLog for recent changes.
+
+ -- Mike Gabriel <mike.gabriel@das-netzwerkteam.de>  Tue, 05 Sep 2017 14:19:41 +0200
+
 libarctica-core-jabus-socket-perl (0.0.0.1-0) unstable; urgency=medium
 
   [ Guangzhou Nianguan Electronics Technology Co.Ltd. ]
