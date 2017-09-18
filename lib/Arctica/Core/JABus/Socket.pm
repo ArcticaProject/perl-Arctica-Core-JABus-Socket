@@ -514,7 +514,20 @@ sub _server_handle_conn {
 
 	} elsif ( $client_conn_cond >= 'in' ) {
 		if ($self->{'clients'}{$client_id}{'io_obj'}) {
-			my $bytes_read = sysread($self->{'clients'}{$client_id}{'io_obj'},my $in_data,16384);
+			my $bytes_read = 0;
+			my $in_data = "";
+
+			BugOUT(9,"JABus Server _handle_conn()->READ starting");
+			while($in_data !~ /\n$/s) {
+				my $rb = sysread($self->{'clients'}{$client_id}{'io_obj'}, $in_data, 16384, length($in_data));
+				last if ($rb == 0 && $in_data eq "");
+
+				$bytes_read += $rb;
+
+				BugOUT(9,"JABus Server _handle_conn()->BUFFER: '$in_data'");
+			}
+
+			BugOUT(9,"JABus Server _handle_conn()->READ completed, $bytes_read bytes read.");
 
 			$self->{'total_bytes_read'} += $bytes_read;
 			$self->{'clients'}{$client_id}{'bytes_read'} 
@@ -709,7 +722,21 @@ sub _client_handle_conn {
 		return 0;
 	} elsif ( $connection_cond >= 'in' ) {
 		if ($self->{'the_socket'}) {
-			my $bytes_read = sysread($self->{'the_socket'},my $in_data,16384);
+			my $bytes_read = 0;
+			my $in_data = "";
+
+			BugOUT(9,"JABus Server _handle_conn()->READ starting");
+			while($in_data !~ /\n$/s) {
+				my $rb = sysread($self->{'the_socket'}, $in_data, 16384, length($in_data));
+				last if ($rb == 0 && $in_data eq "");
+
+				$bytes_read += $rb;
+
+				BugOUT(9,"JABus Server _handle_conn()->BUFFER: '$in_data'");
+			}
+
+			BugOUT(9,"JABus Server _handle_conn()->READ completed, $bytes_read bytes read.");
+
 
 			$self->{'bytes_read'} += $bytes_read;
 
@@ -720,6 +747,8 @@ foreach my $in_data_line (split(/\n/,$in_data)) {
 	if ($in_data_line =~ /JAB/) {
 
 			my $jData;
+			BugOUT(9,"JABus::Socket _client_handle_conn()->Received JSON: '$in_data_line'");
+
 			eval {
 				$jData = decode_json($in_data_line);
 			} or warn("JABus  _client_handle_conn()->DONE (Got some garbage instead of JSON!)");
